@@ -160,7 +160,11 @@ function renderTableCards(seat, cards, small = true) {
 }
 
 function renderOpponents(counts) {
-    const opps = [1, 2, 3, 4].filter((s) => s !== mySeat);
+    // 按游戏人数决定对手位数量（斗地主/跑得快 3 人、浙江麻将 4 人、牛牛 5 人）
+    const maxSeats = ({ 1031: 3, 1032: 3, 1024: 5, 1033: 4 })[gameType] || 3;
+    const all = [];
+    for (let s = 1; s < maxSeats; s++) all.push(s);
+    const opps = all.filter((s) => s !== mySeat);
     const ids = ["opp1", "opp2", "opp3", "opp4"];
     for (let i = 0; i < 4; i++) {
         const el = $(ids[i]);
