@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>斗地主 H5（NiuMa 协议客户端）</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="login" class="panel">
+        <h1>斗地主 H5</h1>
+        <label>玩家ID <input id="playerId" value="p1001" /></label>
+        <label>房号 <input id="roomNumber" placeholder="6 位房号" /></label>
+        <button id="btnLogin">登录并进房</button>
+        <div id="loginMsg" class="hint"></div>
+    </div>
+
+    <div id="table" class="hidden">
+        <header>
+            <span id="roomInfo"></span>
+            <span id="stateInfo"></span>
+            <span id="seatInfo"></span>
+        </header>
+
+        <section class="opponents">
+            <div class="opp" id="opp1"><div class="name">座位1</div><div class="cards">?</div></div>
+            <div class="opp" id="opp2"><div class="name">座位2</div><div class="cards">?</div></div>
+        </section>
+
+        <section class="tablearea">
+            <div id="bottomCards" class="bottom"></div>
+            <div id="playedArea" class="played"></div>
+        </section>
+
+        <section class="mine">
+            <div id="myHand" class="hand"></div>
+            <div class="actions">
+                <button id="btnPlay" disabled>出牌</button>
+                <button id="btnPass" disabled>不出</button>
+                <button id="btnSync">同步</button>
+            </div>
+        </section>
+
+        <footer id="log" class="log"></footer>
+    </div>
+
+    <script src="md5.js"></script>
+    <script src="msgpack.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
