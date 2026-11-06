@@ -60,6 +60,27 @@ node full-game.mjs "http://127.0.0.1:18098/?auto=1&player=p1001&game=1032&room=4
 - secret：从 Redis `player_message_secret:<vendorPlayerId>` 读取后一次性下发
 - 进房由客户端带 token 调 `/player/game/enter/number`（`server.mjs` 转发）
 
+`GET /api/h5/rooms?gameType=1031`
+
+```json
+{ "code": 0, "data": { "items": [
+  { "venueId": "JhV6t1ozdX", "number": "420678", "gameType": 1031,
+    "ownerId": "znJ4T5oU55", "ownerName": "老王", "playerCount": 2, "maxPlayerNums": 3 }
+] } }
+```
+
+- 数据源：`game_<game>` 表 join `venue`（`status < 2`，即未结束），最多 100 条
+- `playerCount` 读 Redis `venue_player_count:<venueId>`，按人数降序
+- `maxPlayerNums`：斗地主 3 / 跑得快 3 / 牛牛 5 / 浙江麻将 4（与各游戏 `_maxPlayerNums` 配置一致）
+- 接口 `@Anonymous`，登录前即可拉取；客户端每 6 秒刷新一次
+
+## 断线重连
+
+- 心跳 3 秒一次；12 秒收不到任何消息判定半开连接，主动断开重连
+- 断线后指数退避重连（0.6s → 1.2s → 2.4s → 4.8s → 8s 封顶，带抖动），顶部徽标显示重连次数
+- 重连成功后复用同一 `venueId` 重新走 `MsgPlayerConnect → MsgEnterVenue → MsgJoinGame → Ready → Sync`，手牌/座位由 Sync 恢复
+- 浏览器恢复联网（`online`）或标签页重新可见时立即重连；头部「重连」按钮可手动触发
+
 ## 实测截图
 
 | 游戏 | 截图 |
@@ -68,9 +89,10 @@ node full-game.mjs "http://127.0.0.1:18098/?auto=1&player=p1001&game=1032&room=4
 | 跑得快 | `screenshot-pdk.png` |
 | 牛牛 | `screenshot-niuniu.png` |
 | 浙江麻将 | `screenshot-mahjong.png` |
+| 大厅（房号列表） | `screenshot-rooms.png` |
 
 ## 待办
 
-1. 断线重连、超时提示、音效、动画
-2. 房号列表 / 快速匹配入口（目前靠输入房号）
+1. 音效、动画、出牌超时提示
+2. 快速匹配：自动挑一个人最多的未满房间并一键进房（现在是手动点列表）
 3. 麻将的碰/杠选择（当前服务端自动决策）

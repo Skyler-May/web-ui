@@ -3,7 +3,10 @@
 const { enc, decode } = window.MsgPack;
 
 let token = "", vendorPlayerId = "", venueId = "", secret = "";
-let ws = null, hbTimer = null;
+let ws = null, wsAddress = "";
+let hbTimer = null, readyTimer = null, watchdogTimer = null, reconnectTimer = null;
+let wantOnline = false, reconnectAttempt = 0, lastRecvAt = 0, connState = "idle";
+let roomsTimer = null;
 let mySeat = -1, gameType = 1031;
 let hand = [], selected = new Set(), myTurn = false, mustPlay = false;
 let tableCards = {};        // 各家出牌区（座位 -> cards）
@@ -15,6 +18,16 @@ function log(msg) {
     const t = new Date().toLocaleTimeString();
     logEl.innerHTML += `<div>[${t}] ${msg}</div>`;
     logEl.scrollTop = logEl.scrollHeight;
+}
+
+// 连接状态徽标：ok 绿色 / warn 等待 / bad 断开
+function setConn(text, kind) {
+    const el = $("connState");
+    if (el) {
+        el.textContent = text;
+        el.className = "conn " + (kind || "ok");
+    }
+    connState = kind || "ok";
 }
 
 // ---------------- 牌面 ----------------
@@ -82,7 +95,7 @@ function sendMsg(msgType, extraPairs = []) {
         for (let i = 0; i < inner.length; i++) bin += String.fromCharCode(inner[i]);
         const wrapper = enc.map([["msgType", enc.str(msgType)], ["msgPack", enc.str(btoa(bin))]]);
         ws.send(wrapper);
-        log("→ " + msgType);
+        if (msgType !== "MsgHeartbeat" && msgType !== "MsgPlayerReady") log("→ " + msgType);
     } catch (e) {
         log("发送异常 " + msgType + ": " + e.message);
     }
@@ -130,6 +143,13 @@ function renderHand() {
     $("btnPlay").textContent = (gameType === 1033) ? "出牌（打出选中）" : "出牌";
 }
 
+// 同步/重连后，用当前已知状态刷新顶部提示（SyncResp 只带手牌，不带轮到谁）
+function refreshStatusText() {
+    if (over) return;
+    if (myTurn) $("stateInfo").textContent = gameType === 1033 ? "轮到你出牌" : (mustPlay ? "轮到你（必须出牌）" : "轮到你");
+    else $("stateInfo").textContent = "已同步，等待其他玩家";
+}
+
 function renderTableCards(seat, cards, small = true) {
     tableCards[seat] = cards;
     const box = $("playedArea");
@@ -167,6 +187,7 @@ function onDdz(type, body) {
         case "MsgLandlordSyncResp":
             if (body && body.handCards) { hand = body.handCards; selected.clear(); renderHand(); }
             log("同步：手牌 " + hand.length + " 张，状态 " + (body ? body.gameState : "?"));
+            refreshStatusText();
             break;
         case "MsgLandlordHandCard":
             hand = body.cards || [];
@@ -211,6 +232,7 @@ function onPdk(type, body) {
         case "MsgPaoDeKuaiSyncResp":
             if (body && body.handCards) { hand = body.handCards; selected.clear(); renderHand(); }
             log("同步：手牌 " + hand.length + " 张，状态 " + (body ? body.gameState : "?"));
+            refreshStatusText();
             break;
         case "MsgPaoDeKuaiHandCard":
             hand = body.cards || [];
@@ -256,6 +278,7 @@ function onNiuNiu(type, body) {
         case "MsgNiuNiuSyncResp":
             if (body && body.handCards) { hand = body.handCards; selected.clear(); renderHand(); }
             log("同步：手牌 " + hand.length + " 张，状态 " + (body ? body.gameState : "?"));
+            refreshStatusText();
             break;
         case "MsgNiuNiuHandCard":
             hand = body.cards || [];
@@ -288,6 +311,7 @@ function onMahjong(type, body) {
         case "MsgZhejiangMahjongSyncResp":
             if (body && body.hand) { hand = body.hand; selected.clear(); renderHand(); }
             log("同步：手牌 " + hand.length + " 张，状态 " + (body ? body.gameState : "?"));
+            refreshStatusText();
             break;
         case "MsgZhejiangMahjongHandCard":
             hand = body.hand || [];
@@ -339,7 +363,7 @@ function onMessage(wrap) {
     if (wrap.msgPack) {
         try { body = decode(b64ToBytes(wrap.msgPack)); } catch (e) { log("解码失败: " + e.message); }
     }
-    log("← " + type);
+    if (type !== "MsgHeartbeatResp") log("← " + type);
 
     if (type === "MsgPlayerConnectResp") {
         sendMsg("MsgEnterVenue", [["venueId", enc.str(venueId)], ["gameType", enc.int(gameType)], ["base64", enc.str("")]]);
@@ -385,6 +409,90 @@ function onMessage(wrap) {
     }
 }
 
+// ---------------- 连接与断线重连 ----------------
+function startTimers() {
+    stopTimers();
+    hbTimer = setInterval(() => sendMsg("MsgHeartbeat", [["venueId", enc.str(venueId)]]), 3000);
+    readyTimer = setInterval(() => sendMsg("MsgPlayerReady", [["venueId", enc.str(venueId)]]), 5000);
+    // 假死检测：12 秒收不到任何消息就判定半开连接，强制重连
+    watchdogTimer = setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (Date.now() - lastRecvAt > 12000) {
+            log("12 秒未收到任何消息，判定连接假死，强制重连");
+            try { ws.close(); } catch (e) { }
+        }
+    }, 2000);
+}
+
+function stopTimers() {
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+    if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+    if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+}
+
+function scheduleReconnect(reason) {
+    if (!wantOnline || !wsAddress || reconnectTimer) return;
+    reconnectAttempt++;
+    const delay = Math.min(8000, 600 * Math.pow(2, reconnectAttempt - 1)) + Math.floor(Math.random() * 250);
+    setConn(`重连中 ${reconnectAttempt}`, "bad");
+    log(`${reason}，${(delay / 1000).toFixed(1)}s 后重连（第 ${reconnectAttempt} 次）`);
+    $("stateInfo").textContent = "连接断开，正在重连…";
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; openSocket(); }, delay);
+}
+
+function openSocket() {
+    if (!wantOnline || !wsAddress) return;
+    stopTimers();
+    setConn(reconnectAttempt ? `重连中 ${reconnectAttempt}` : "连接中…", "warn");
+    let sock;
+    try { sock = new WebSocket(wsAddress); } catch (e) { scheduleReconnect("创建连接失败"); return; }
+    ws = sock;
+    sock.binaryType = "arraybuffer";
+    sock.onopen = () => {
+        if (ws !== sock) return;
+        const wasReconnect = reconnectAttempt > 0;
+        reconnectAttempt = 0;
+        lastRecvAt = Date.now();
+        setConn("已连接", "ok");
+        log("WS 已连接 " + wsAddress);
+        $("stateInfo").textContent = wasReconnect ? "重连成功，正在恢复…" : "已连接，等待牌局…";
+        sendMsg("MsgPlayerConnect", []);
+        startTimers();
+    };
+    sock.onmessage = (ev) => {
+        if (ws !== sock) return;
+        lastRecvAt = Date.now();
+        try { onMessage(decode(new Uint8Array(ev.data))); } catch (e) { log("消息解析失败: " + e.message); }
+    };
+    sock.onerror = () => { if (ws === sock) log("WS 错误"); };
+    sock.onclose = (ev) => {
+        if (ws !== sock) return;
+        stopTimers();
+        if (!wantOnline) return;
+        log("WS 断开" + (ev && ev.code ? "（code " + ev.code + "）" : ""));
+        scheduleReconnect("连接断开");
+    };
+}
+
+// 立即重连（手动按钮 / 网络恢复 / 页面重新可见）
+function forceReconnect() {
+    if (!wantOnline) return;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    const old = ws;
+    ws = null;                                   // 旧 socket 的 close 回调作废
+    if (old) { try { old.close(); } catch (e) { } }
+    reconnectAttempt = 0;
+    log("手动重连");
+    openSocket();
+}
+
+window.addEventListener("online", () => {
+    if (wantOnline && (!ws || ws.readyState === WebSocket.CLOSED)) forceReconnect();
+});
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && wantOnline && (!ws || ws.readyState >= WebSocket.CLOSING)) forceReconnect();
+});
+
 // ---------------- 启动 ----------------
 async function loginAndJoin() {
     const playerId = $("playerId").value.trim();
@@ -411,29 +519,86 @@ async function loginAndJoin() {
     }).then((r) => r.json());
     if (!er.venueId) { $("loginMsg").textContent = "进房失败: " + JSON.stringify(er).slice(0, 140); return; }
     venueId = er.venueId;
-    let wsAddress = (er.wsAddress || "ws://127.0.0.1:9098").replace("10.0.2.2", "127.0.0.1");
+    wsAddress = (er.wsAddress || "ws://127.0.0.1:9098").replace("10.0.2.2", "127.0.0.1");
+
+    // 新的进房会话：清掉上一局残留状态
+    hand = []; selected.clear(); tableCards = {}; mySeat = -1;
+    myTurn = false; mustPlay = false; over = false; reconnectAttempt = 0;
+    $("playedArea").innerHTML = "";
+    $("bottomCards").innerHTML = "";
+    renderHand();
 
     $("login").classList.add("hidden");
     $("table").classList.remove("hidden");
     $("roomInfo").textContent = `房号 ${number} | ${vendorPlayerId} | ${({ 1031: "斗地主", 1024: "牛牛", 1032: "跑得快", 1033: "浙江麻将" })[gameType] || gameType}`;
 
-    ws = new WebSocket(wsAddress);
-    ws.binaryType = "arraybuffer";
-    ws.onopen = () => {
-        log("WS 已连接 " + wsAddress);
-        sendMsg("MsgPlayerConnect", []);
-        if (hbTimer) clearInterval(hbTimer);
-        hbTimer = setInterval(() => sendMsg("MsgHeartbeat", [["venueId", enc.str(venueId)]]), 3000);
-        setInterval(() => sendMsg("MsgPlayerReady", [["venueId", enc.str(venueId)]]), 5000);
-    };
-    ws.onmessage = (ev) => {
-        try { onMessage(decode(new Uint8Array(ev.data))); } catch (e) { log("消息解析失败: " + e.message); }
-    };
-    ws.onerror = () => log("WS 错误");
-    ws.onclose = () => log("WS 关闭");
+    stopRoomAutoRefresh();
+    wantOnline = true;
+    openSocket();
+}
+
+// ---------------- 房号列表 ----------------
+async function loadRooms() {
+    const box = $("roomList");
+    if (!box) return;
+    const g = $("gameSelect") ? Number($("gameSelect").value) || 1031 : 1031;
+    try {
+        const r = await fetch(`/api/rooms?gameType=${g}`).then((x) => x.json());
+        const items = (r && r.data && r.data.items) || (r && r.items) || [];
+        renderRooms(items, g);
+    } catch (e) {
+        box.innerHTML = `<div class="empty">房间列表不可用：${e.message}</div>`;
+    }
+}
+
+function renderRooms(items, g) {
+    const box = $("roomList");
+    if (!items || !items.length) {
+        box.innerHTML = `<div class="empty">暂无房间，先建房或换个游戏</div>`;
+        return;
+    }
+    box.innerHTML = "";
+    for (const it of items.slice(0, 30)) {
+        const max = it.maxPlayerNums || 0;
+        const count = it.playerCount || 0;
+        const full = max > 0 && count >= max;
+        const row = document.createElement("div");
+        row.className = "room-item" + (full ? " full" : "");
+        const info = document.createElement("div");
+        info.innerHTML = `<div class="room-no">${it.number || "?"}</div>
+            <div class="room-meta">${count}/${max || "?"} 人 · ${it.ownerName || "房主"}</div>`;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = full ? "已满" : "进入";
+        btn.disabled = full;
+        btn.onclick = () => {
+            $("roomNumber").value = it.number || "";
+            $("gameSelect").value = String(g);
+            $("loginMsg").textContent = `已选房号 ${it.number}`;
+        };
+        row.appendChild(info);
+        row.appendChild(btn);
+        box.appendChild(row);
+    }
+}
+
+function stopRoomAutoRefresh() {
+    if (roomsTimer) { clearInterval(roomsTimer); roomsTimer = null; }
+}
+
+function startRoomAutoRefresh() {
+    stopRoomAutoRefresh();
+    roomsTimer = setInterval(() => {
+        const panel = $("login");
+        if (panel && !panel.classList.contains("hidden")) loadRooms();
+        else stopRoomAutoRefresh();
+    }, 6000);
 }
 
 $("btnLogin").onclick = loginAndJoin;
+$("btnReconnect").onclick = forceReconnect;
+$("btnRefreshRooms").onclick = loadRooms;
+if ($("gameSelect")) $("gameSelect").addEventListener("change", loadRooms);
 $("btnSync").onclick = () => {
     const t = { 1031: "MsgLandlordSync", 1032: "MsgPaoDeKuaiSync", 1024: "MsgNiuNiuSync", 1033: "MsgZhejiangMahjongSync" }[gameType];
     if (t) sendMsg(t, [["venueId", enc.str(venueId)]]);
@@ -459,12 +624,19 @@ $("btnPass").onclick = () => {
 };
 
 // ---------------- 自动化测试钩子 ----------------
-window.__state = () => ({ myTurn, mustPlay, hand: hand.length, selected: selected.size, seat: mySeat, gameType, over });
+window.__state = () => ({
+    myTurn, mustPlay, hand: hand.length, selected: selected.size, seat: mySeat, gameType, over,
+    conn: connState, attempts: reconnectAttempt, rooms: document.querySelectorAll("#roomList .room-item").length
+});
 
 // 自动登录：?auto=1&player=p1001&room=xxxx&game=1031
 (function autoLogin() {
     const q = new URLSearchParams(location.search);
-    if (q.get("auto") !== "1") return;
+    if (q.get("auto") !== "1") {
+        loadRooms();
+        startRoomAutoRefresh();
+        return;
+    }
     if (q.get("player")) $("playerId").value = q.get("player");
     if (q.get("room")) $("roomNumber").value = q.get("room");
     if (q.get("game") && $("gameSelect")) $("gameSelect").value = q.get("game");

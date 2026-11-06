@@ -18,7 +18,14 @@
             </select>
         </label>
         <label>玩家ID <input id="playerId" value="p1001" /></label>
-        <label>房号 <input id="roomNumber" placeholder="6 位房号" /></label>
+        <div class="rooms">
+            <div class="rooms-head">
+                <span>可用房间</span>
+                <button id="btnRefreshRooms" type="button">刷新</button>
+            </div>
+            <div id="roomList" class="room-list"><div class="empty">点「刷新」加载房间</div></div>
+        </div>
+        <label>房号 <input id="roomNumber" placeholder="6 位房号，或从上面选" /></label>
         <button id="btnLogin">登录并进房</button>
         <div id="loginMsg" class="hint"></div>
     </div>
@@ -28,6 +35,8 @@
             <span id="roomInfo"></span>
             <span id="stateInfo"></span>
             <span id="seatInfo"></span>
+            <span id="connState" class="conn ok">已连接</span>
+            <button id="btnReconnect" type="button" title="手动重连">重连</button>
         </header>
 
         <section class="opponents">
