@@ -208,19 +208,26 @@ async function loginAndJoin() {
     }
     $("loginMsg").textContent = "登录中…";
 
-    const lr = await fetch("/api/login", {
+    // 1) 启动接口：拿 token + 消息密钥（服务端下发，前端不接触商户密钥）
+    const lr = await fetch("/api/launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId })
+        body: JSON.stringify({ playerId, roomNumber: number, gameType: 1031 })
     }).then((r) => r.json());
-    if (lr.code !== 0) {
-        $("loginMsg").textContent = "登录失败: " + JSON.stringify(lr).slice(0, 120);
+    if (!lr || lr.code !== 0) {
+        $("loginMsg").textContent = "启动失败: " + JSON.stringify(lr).slice(0, 140);
         return;
     }
     token = lr.data.token;
-    vendorPlayerId = lr.data.vendorPlayerId || lr.data.playerId;
-    $("loginMsg").textContent = "登录成功 " + vendorPlayerId + "，进房中…";
+    vendorPlayerId = lr.data.vendorPlayerId;
+    secret = lr.data.secret || "";
+    if (!secret) {
+        $("loginMsg").textContent = "服务端未下发消息密钥";
+        return;
+    }
+    $("loginMsg").textContent = "已获取凭证 " + vendorPlayerId + "，进房中…";
 
+    // 2) 按房号进房（代理转发，带 token）
     const er = await fetch("/api/enter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -233,13 +240,6 @@ async function loginAndJoin() {
     venueId = er.venueId;
     let wsAddress = er.wsAddress || "ws://127.0.0.1:9098";
     wsAddress = wsAddress.replace("10.0.2.2", "127.0.0.1");
-
-    const sr = await fetch("/api/secret?playerId=" + encodeURIComponent(vendorPlayerId)).then((r) => r.json());
-    secret = sr.secret || "";
-    if (!secret) {
-        $("loginMsg").textContent = "没有消息密钥（玩家可能还没建立会话）";
-        return;
-    }
 
     $("login").classList.add("hidden");
     $("table").classList.remove("hidden");

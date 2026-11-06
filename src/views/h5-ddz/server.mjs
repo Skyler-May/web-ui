@@ -49,29 +49,12 @@ const MIME = {
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
 
-    // ---- API: 登录（服务端持有商户密钥，浏览器不接触） ----
-    if (url.pathname === "/api/login" && req.method === "POST") {
+    // ---- API: 启动（转发到 niuma-admin 的 /api/h5/launch，服务端换 token + 下发消息密钥） ----
+    if (url.pathname === "/api/launch" && req.method === "POST") {
         const body = await readBody(req);
-        const playerId = body.playerId || "p1001";
-        const ts = String(Math.floor(Date.now() / 1000));
-        const nonce = crypto.randomUUID();
-        const reqBody = JSON.stringify({
-            merchantId: MERCHANT,
-            playerId,
-            nickname: playerId,
-            currency: "GOLD",
-            lang: "zh-CN"
-        });
-        const r = await postJson(VENDOR + "/api/merchant/login", {
-            "Content-Type": "application/json",
-            "X-Merchant-Id": MERCHANT,
-            "X-Timestamp": ts,
-            "X-Nonce": nonce,
-            "X-Sign": hmac(MERCHANT, ts, nonce, reqBody)
-        }, reqBody);
+        const r = await postJson(VENDOR + "/api/h5/launch", { "Content-Type": "application/json" }, JSON.stringify(body));
         return send(res, 200, r.json);
     }
-
     // ---- API: 按房号进房 ----
     if (url.pathname === "/api/enter" && req.method === "POST") {
         const body = await readBody(req);
@@ -80,16 +63,6 @@ const server = http.createServer(async (req, res) => {
             "PLAYER-AUTHORIZATION": body.token
         }, JSON.stringify({ number: body.number, gameType: body.gameType || 1031 }));
         return send(res, r.status, r.json);
-    }
-
-    // ---- API: 取消息密钥（仅本地开发用：直接从 Redis 读） ----
-    if (url.pathname === "/api/secret" && req.method === "GET") {
-        const playerId = url.searchParams.get("playerId") || "";
-        let secret = "";
-        try {
-            secret = execSync(`docker exec gaming-redis redis-cli -n 9 get player_message_secret:${playerId}`).toString().trim();
-        } catch (e) { /* ignore */ }
-        return send(res, 200, { playerId, secret });
     }
 
     // ---- 静态文件 ----
