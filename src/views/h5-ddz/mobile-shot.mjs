@@ -55,6 +55,12 @@ async function main() {
             width: W, height: H, deviceScaleFactor: 2, mobile: true
         });
         await cmd("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+        if (process.env.REDUCED === "1") {
+            // 关闭动效，便于稳定截图
+            await cmd("Emulation.setEmulatedMedia", {
+                features: [{ name: "prefers-reduced-motion", value: "reduce" }]
+            });
+        }
         await cmd("Page.navigate", { url });
         console.log(`已打开 ${url}（${W}x${H} 移动端）`);
         await sleep(waitSec * 1000);

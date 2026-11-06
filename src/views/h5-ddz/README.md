@@ -126,3 +126,14 @@ node full-game.mjs "http://127.0.0.1:18098/?auto=1&player=p1001&game=1032&room=4
 | 房号列表 + 刷新 | ✅ 列出房间、人数、进入按钮 | `screenshot-rooms.png` |
 | 列表一键进房 | ✅ 点「进入」→ 自动进房并发牌 | `screenshot-enter-from-list.png` |
 | 断线重连 | ✅ 点「重连」→ WS 重连 → 同步恢复手牌 | `screenshot-reconnect.png` |
+## 响应式断点
+
+| 断点 | 布局 |
+|---|---|
+| ≥1024px（桌面/平板横屏） | 牌面 56×80，手牌居中不重叠，按钮大号 |
+| 768–1023px（平板竖屏） | 牌面放大、对手位加宽，手牌可换行 |
+| ≤640px（手机竖屏） | 牌宽 38px + 手牌重叠、按钮整行等分、日志压缩 |
+| landscape & h≤500px（手机横屏） | 牌面 42×60、手牌轻微重叠一行放完、按钮居中、纵向两端对齐 |
+| ≤380px（小屏） | 牌面再缩一档 |
+
+验收截图：`screenshot-mobile.png`（竖屏）、`screenshot-landscape.png`（横屏）、`screenshot-tablet.png`（平板）。
