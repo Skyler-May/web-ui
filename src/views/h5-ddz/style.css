@@ -46,7 +46,7 @@ header {
     font-size: 13px; opacity: .9; padding: 6px 4px; border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
-.opponents { display: flex; justify-content: space-around; margin-top: 6px; }
+.opponents { display: flex; justify-content: space-around; margin-top: 6px; flex-wrap: wrap; gap: 8px; }
 .opp {
     background: rgba(0, 0, 0, .25); border-radius: 10px; padding: 8px 14px; text-align: center;
     min-width: 120px; border: 1px solid rgba(255, 255, 255, .08);
@@ -86,4 +86,23 @@ header {
 .log {
     height: 84px; overflow-y: auto; font-size: 12px; opacity: .75;
     border-top: 1px solid rgba(255, 255, 255, .08); margin-top: 8px; padding-top: 6px;
+}
+
+/* ---------- 麻将牌 ---------- */
+.tile {
+    width: 44px; height: 62px; border-radius: 6px; background: #f7f3e6; color: #2b2b2b;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .35); user-select: none; cursor: pointer;
+    border: 2px solid transparent; flex-direction: column;
+}
+.tile.small { width: 32px; height: 46px; font-size: 12px; }
+.tile.selected { border-color: var(--gold); transform: translateY(-8px); }
+.tile.wan { color: #1b5e20; }
+.tile.tiao { color: #0d47a1; }
+.tile.tong { color: #b71c1c; }
+.tile.wind { color: #4a148c; }
+
+select {
+    width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, .18); background: rgba(0, 0, 0, .3); color: var(--text);
 }

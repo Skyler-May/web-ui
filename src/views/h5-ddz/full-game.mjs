@@ -57,7 +57,7 @@ async function main() {
         console.log("开始自动对局…");
 
         let over = false;
-        for (let i = 0; i < 120; i++) {
+        for (let i = 0; i < 150; i++) {
             await sleep(1200);
             const st = await evalJs(`(function(){
                 const s = window.__state ? window.__state() : null;
@@ -69,7 +69,7 @@ async function main() {
             if (st.s && st.s.myTurn) {
                 const r = await evalJs(`(function(){
                     const s = window.__state();
-                    const cards = [...document.querySelectorAll('#myHand .card')];
+                    const cards = [...document.querySelectorAll('#myHand .card, #myHand .tile')];
                     if (!cards.length) return 'no-card';
                     if (s.mustPlay) {
                         cards[0].click();
