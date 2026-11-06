@@ -114,6 +114,7 @@ function renderHand() {
     box.innerHTML = "";
     const isMj = (gameType === 1033);
     const sorted = isMj ? [...hand].sort((a, b) => a - b) : [...hand].sort((a, b) => a.id - b.id);
+    let dealIndex = 0;
     for (const item of sorted) {
         let el;
         if (isMj) {
@@ -135,6 +136,7 @@ function renderHand() {
                 renderHand();
             };
         }
+        el.style.setProperty("--i", dealIndex++);
         box.appendChild(el);
     }
     $("btnPlay").disabled = !myTurn || over || selected.size === 0;
@@ -180,6 +182,33 @@ function renderOpponents(counts) {
     }
 }
 
+
+// ---------------- 结算横幅 ----------------
+let bannerTimer = null;
+function showBanner(title, sub, ms = 4200) {
+    let el = document.getElementById("resultBanner");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "resultBanner";
+        document.body.appendChild(el);
+    }
+    el.innerHTML = title + (sub ? `<span class="sub">${sub}</span>` : "");
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { if (el && el.parentNode) el.remove(); }, ms);
+}
+
+
+// 高亮当前该行动的座位
+function markActiveSeat(seat) {
+    ["opp1", "opp2", "opp3", "opp4"].forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        const name = el.querySelector(".name");
+        const isActive = name && name.textContent === "座位" + seat;
+        el.classList.toggle("active", !!isActive);
+    });
+}
+
 // ---------------- 各游戏消息 ----------------
 function onDdz(type, body) {
     switch (type) {
@@ -203,6 +232,7 @@ function onDdz(type, body) {
             mustPlay = !!body.mustPlay;
             over = false;
             $("stateInfo").textContent = myTurn ? (mustPlay ? "轮到你（必须出牌）" : "轮到你") : ("等待座位 " + body.seat);
+            markActiveSeat(body.seat);
             renderHand();
             break;
         case "MsgLandlordPlayCardResp":
@@ -223,6 +253,8 @@ function onDdz(type, body) {
             over = true;
             $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner;
             log("本局结束：赢家座位 " + body.winner + "，地主" + (body.landlordWin ? "胜" : "负") + "，分数 " + (body.deltas || []).join("/"));
+            showBanner(body.winner === mySeat ? "🎉 你赢了" : "本局结束",
+                "赢家 座位" + body.winner + " · 地主" + (body.landlordWin ? "胜" : "负") + " · " + (body.deltas || []).join(" / "));
             renderHand();
             break;
     }
@@ -268,6 +300,8 @@ function onPdk(type, body) {
             over = true;
             $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner;
             log("本局结束：赢家座位 " + body.winner + "，分数 " + (body.deltas || []).join("/"));
+            showBanner(body.winner === mySeat ? "🎉 你赢了" : "本局结束",
+                "赢家 座位" + body.winner + " · " + (body.deltas || []).join(" / "));
             renderHand();
             break;
     }
@@ -300,6 +334,8 @@ function onNiuNiu(type, body) {
             myTurn = false;
             $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner + "（庄家 座位" + body.banker + "）";
             log("本局结束：赢家座位 " + body.winner + "，分数 " + (body.deltas || []).join("/"));
+            showBanner(body.winner === mySeat ? "🎉 你赢了" : "本局结束",
+                "赢家 座位" + body.winner + " · " + (body.deltas || []).join(" / "));
             renderHand();
             break;
     }
@@ -330,6 +366,7 @@ function onMahjong(type, body) {
             mustPlay = true;
             over = false;
             $("stateInfo").textContent = myTurn ? "轮到你出牌" : ("等待座位 " + body.seat);
+            markActiveSeat(body.seat);
             renderHand();
             break;
         case "MsgZhejiangMahjongDiscardResp":
@@ -356,6 +393,8 @@ function onMahjong(type, body) {
             $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner;
             log("本局结束：赢家座位 " + body.winner + (body.zimo ? "(自摸)" : "(点炮)") +
                 "，番 " + body.fan + "，得分 " + body.score + "，牌型 " + body.desc);
+            showBanner(body.winner === mySeat ? "🎉 你胡了" : "本局结束",
+                "赢家 座位" + body.winner + " · " + (body.zimo ? "自摸" : "点炮") + " · " + body.desc + " · " + body.fan + "番 " + body.score + "分");
             renderHand();
             break;
     }
@@ -367,7 +406,11 @@ function onMessage(wrap) {
     if (wrap.msgPack) {
         try { body = decode(b64ToBytes(wrap.msgPack)); } catch (e) { log("解码失败: " + e.message); }
     }
-    if (type !== "MsgHeartbeatResp") log("← " + type);
+    // 只记录与当前游戏相关的消息，过滤其它房间/游戏的日志噪音
+    const PREFIX = { 1031: "MsgLandlord", 1032: "MsgPaoDeKuai", 1024: "MsgNiuNiu", 1033: "MsgZhejiangMahjong" }[gameType];
+    const CORE = ["MsgPlayerConnectResp", "MsgEnterVenueResp", "MsgJoinGameResp", "MsgPlayerReadyResp", "MsgAvatarConnect", "MsgAvatarLeave"];
+    if (type !== "MsgHeartbeatResp" && (!PREFIX || type.startsWith(PREFIX) || CORE.includes(type) || !type.startsWith("Msg")))
+        log("← " + type);
 
     if (type === "MsgPlayerConnectResp") {
         sendMsg("MsgEnterVenue", [["venueId", enc.str(venueId)], ["gameType", enc.int(gameType)], ["base64", enc.str("")]]);

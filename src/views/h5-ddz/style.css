@@ -148,3 +148,116 @@ header #btnReconnect {
 .room-item .room-meta { font-size: 12px; opacity: .65; }
 .room-item.full { opacity: .45; }
 .room-item.full button { cursor: not-allowed; }
+/* ================= 动效 ================= */
+@keyframes dealIn {
+    from { opacity: 0; transform: translate(-40px, -120px) scale(.6) rotate(-12deg); }
+    to { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+@keyframes playOut {
+    from { opacity: 0; transform: translateY(60px) scale(.7); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pulseSeat {
+    0%, 100% { box-shadow: 0 0 0 rgba(245, 196, 81, .0); }
+    50% { box-shadow: 0 0 16px rgba(245, 196, 81, .85); }
+}
+@keyframes bannerIn {
+    from { opacity: 0; transform: translate(-50%, -20px) scale(.9); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* 发牌：每张牌按 --i 依次飞入 */
+.hand .card, .hand .tile { animation: dealIn .32s ease-out both; animation-delay: calc(var(--i, 0) * 35ms); }
+/* 出牌：桌面牌弹入 */
+.played .card, .played .tile { animation: playOut .22s ease-out both; }
+/* 轮到的对手位脉冲 */
+.opp.active { animation: pulseSeat 1.4s ease-in-out infinite; }
+/* 选中的牌抬起（带过渡） */
+.card, .tile { transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.card:active, .tile:active { transform: scale(.96); }
+/* 按钮按下反馈 */
+.actions button:not(:disabled):active, .panel button:active { transform: scale(.97); }
+.actions button { transition: transform .1s ease, background .15s ease; }
+
+/* 结算横幅 */
+#resultBanner {
+    position: fixed; left: 50%; top: 22%; transform: translateX(-50%);
+    padding: 16px 26px; border-radius: 14px; z-index: 60;
+    background: rgba(0, 0, 0, .78); border: 1px solid rgba(245, 196, 81, .6);
+    color: #ffe6a6; font-size: 17px; font-weight: 700; text-align: center;
+    animation: bannerIn .28s ease-out both; pointer-events: none;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, .5);
+}
+#resultBanner .sub { display: block; margin-top: 6px; font-size: 13px; font-weight: 400; color: #d6e9df; }
+
+/* 手牌横向滑动 + 重叠（牌多时） */
+.hand { overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
+
+/* 尊重系统「减少动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+    .hand .card, .hand .tile, .played .card, .played .tile, .opp.active, #resultBanner {
+        animation: none !important;
+    }
+}
+
+/* ================= 移动端适配 ================= */
+@media (max-width: 900px) {
+    #table { padding: 6px 8px; }
+    .hand { justify-content: flex-start; }
+    .played { min-height: 60px; }
+}
+
+@media (max-width: 640px) {
+    :root { --card-w: 38px; --card-h: 54px; }
+
+    header { font-size: 11px; gap: 8px; flex-wrap: wrap; padding: 4px 2px; }
+    header span { flex: 1 1 auto; }
+    #connState { font-size: 10px; padding: 2px 6px; }
+    #btnReconnect { font-size: 11px; padding: 3px 8px; }
+
+    .opponents { gap: 4px; margin-top: 2px; }
+    .opp { min-width: 62px; padding: 4px 6px; border-radius: 8px; }
+    .opp .name { font-size: 10px; }
+    .opp .cards { font-size: 13px; margin-top: 2px; }
+
+    .tablearea { gap: 4px; }
+    .bottom { font-size: 10px; gap: 2px; }
+    .played { min-height: 48px; gap: 3px; }
+
+    .card { width: var(--card-w); height: var(--card-h); font-size: 12px; border-radius: 5px; }
+    .card.small { width: 26px; height: 38px; font-size: 10px; }
+    .card .suit { font-size: 9px; }
+    .tile { width: 34px; height: 48px; font-size: 12px; border-radius: 5px; }
+    .tile.small { width: 24px; height: 34px; font-size: 10px; }
+
+    /* 手牌重叠，保证 20 张也能一屏放下 */
+    .hand { gap: 0; justify-content: center; min-height: 56px; padding-bottom: 6px; }
+    .hand .card, .hand .tile { margin-left: -14px; }
+    .hand .card:first-child, .hand .tile:first-child { margin-left: 0; }
+    .hand .card.selected, .hand .tile.selected { transform: translateY(-10px); z-index: 2; }
+
+    .actions { gap: 8px; margin-top: 6px; }
+    .actions button { flex: 1; padding: 11px 0; font-size: 14px; border-radius: 10px; }
+
+    .log { height: 62px; font-size: 10px; }
+
+    /* 登录面板 */
+    .panel { margin: 3vh auto; width: calc(100% - 24px); padding: 18px; }
+    .panel h1 { font-size: 19px; margin-bottom: 12px; }
+    .panel input, .panel select { padding: 11px 10px; font-size: 15px; }
+    .rooms { max-height: 34vh; }
+    .room-item { font-size: 12px; }
+
+    #resultBanner { top: 16%; font-size: 15px; padding: 12px 18px; max-width: 82vw; }
+}
+
+@media (max-width: 380px) {
+    .card { width: 32px; height: 46px; font-size: 11px; }
+    .tile { width: 28px; height: 40px; font-size: 11px; }
+    .hand .card, .hand .tile { margin-left: -16px; }
+}
+
+/* 触屏优化 */
+@media (hover: none) {
+    .card, .tile, .actions button, .room-item button { touch-action: manipulation; }
+}
