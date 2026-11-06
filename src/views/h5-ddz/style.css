@@ -323,3 +323,19 @@ header #btnReconnect {
     .tablearea { gap: 14px; }
     .bottom { font-size: 14px; }
 }
+
+/* ---------- 碰/杠 询问按钮 ---------- */
+.actionbar {
+    display: flex; gap: 10px; justify-content: center; margin-top: 8px;
+}
+.actionbar button {
+    padding: 10px 26px; border-radius: 10px; border: none; cursor: pointer;
+    font-size: 15px; font-weight: 700; color: #3a2a05;
+    background: linear-gradient(180deg, #f7d072, #d9a326);
+    animation: bannerIn .18s ease-out both;
+}
+.actionbar button.pass {
+    background: rgba(255, 255, 255, .14); color: var(--text); font-weight: 400;
+    border: 1px solid rgba(255, 255, 255, .22);
+}
+.actionbar .timer { font-size: 12px; opacity: .7; align-self: center; }

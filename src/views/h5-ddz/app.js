@@ -369,6 +369,13 @@ function onMahjong(type, body) {
             markActiveSeat(body.seat);
             renderHand();
             break;
+        case "MsgZhejiangMahjongAction":
+            if (body && body.seat === mySeat) {
+                log("可以 " + ((body.options & 2) ? "杠 " : "") + ((body.options & 1) ? "碰 " : "") + "牌 " + mahjongTileText(body.tile));
+                showActionBar(body);
+            }
+            break;
+
         case "MsgZhejiangMahjongDiscardResp":
             if (!body.success) {
                 log("出牌被拒: " + (body.errMsg || "?"));
@@ -454,6 +461,56 @@ function onMessage(wrap) {
         else onMahjong(type, body || {});
         return;
     }
+}
+
+
+// ---------------- 碰/杠 询问 ----------------
+let actionTimer = null;
+function showActionBar(body) {
+    const bar = $("actionBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    bar.classList.remove("hidden");
+
+    const mk = (label, choice, cls) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (cls) b.className = cls;
+        b.onclick = () => sendAction(choice);
+        return b;
+    };
+    if (body.options & 2) bar.appendChild(mk("杠", 2));
+    if (body.options & 1) bar.appendChild(mk("碰", 1));
+    if (body.options & 4) bar.appendChild(mk("胡", 4));
+    bar.appendChild(mk("过", 0, "pass"));
+
+    let left = body.second || 5;
+    const tip = document.createElement("span");
+    tip.className = "timer";
+    tip.textContent = left + "s";
+    bar.appendChild(tip);
+    if (actionTimer) clearInterval(actionTimer);
+    actionTimer = setInterval(() => {
+        left--;
+        tip.textContent = Math.max(left, 0) + "s";
+        if (left <= 0) {
+            clearInterval(actionTimer);
+            actionTimer = null;
+            hideActionBar();
+        }
+    }, 1000);
+}
+
+function hideActionBar() {
+    const bar = $("actionBar");
+    if (bar) { bar.classList.add("hidden"); bar.innerHTML = ""; }
+    if (actionTimer) { clearInterval(actionTimer); actionTimer = null; }
+}
+
+function sendAction(choice) {
+    hideActionBar();
+    sendMsg("MsgZhejiangMahjongActionResp", [["venueId", enc.str(venueId)], ["choice", enc.int(choice)]]);
+    log("我选择：" + ({ 0: "过", 1: "碰", 2: "杠", 4: "胡" }[choice] || choice));
 }
 
 // ---------------- 连接与断线重连 ----------------
