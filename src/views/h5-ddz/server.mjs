@@ -98,7 +98,18 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-    console.log(`H5 client: http://127.0.0.1:${PORT}/`);
+const HOST = process.env.HOST || "0.0.0.0";
+server.listen(PORT, HOST, () => {
+    console.log(`H5 client: http://127.0.0.1:${PORT}/  (bind ${HOST})`);
     console.log(`vendor: ${VENDOR}, merchant: ${MERCHANT}`);
+    // 打印内网地址，方便手机访问
+    import("node:os").then(({ default: os }) => {
+        const nets = os.networkInterfaces();
+        for (const name of Object.keys(nets)) {
+            for (const ni of nets[name] || []) {
+                if (ni.family === "IPv4" && !ni.internal)
+                    console.log(`  局域网: http://${ni.address}:${PORT}/`);
+            }
+        }
+    });
 });

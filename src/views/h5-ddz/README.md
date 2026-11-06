@@ -137,3 +137,33 @@ node full-game.mjs "http://127.0.0.1:18098/?auto=1&player=p1001&game=1032&room=4
 | ≤380px（小屏） | 牌面再缩一档 |
 
 验收截图：`screenshot-mobile.png`（竖屏）、`screenshot-landscape.png`（横屏）、`screenshot-tablet.png`（平板）。
+## 真机 / 局域网调试
+
+> Expo Go 是 React Native 运行时，**不能直接打开纯 H5 页面**。真机请用手机浏览器访问。
+
+1. 手机与电脑连同一 WiFi；
+2. 启动开发服务（默认绑定 0.0.0.0，会打印内网地址）：
+
+```bash
+cd vendor/web-ui/src/views/h5-ddz
+PORT=18089 node server.mjs
+```
+
+3. 手机浏览器打开控制台打印的「局域网」地址，例如 `http://192.168.3.110:18089/`；
+
+**为什么用 18089**：Windows 防火墙已有 `NiuMa-Table` 入站规则放行 `10086 / 9098 / 18089 / 18080 / 8080`，用这个端口免去加规则（加规则需要管理员权限）。
+
+4. 客户端会把服务端返回的 `ws://127.0.0.1:9098` **改写成页面所在主机**（`normalizeWs`），所以手机上 WS 会自动指向 `ws://<电脑IP>:9098`；
+5. 游戏服 9098 已由 `netsh portproxy` 从 `0.0.0.0:9098` 转发到 WSL，手机可直连。
+
+### 排错
+
+| 现象 | 检查 |
+|---|---|
+| 手机打不开页面 | 是否同一网段、路由器是否开启 AP 隔离、电脑防火墙 |
+| 页面能开但连不上牌桌 | 手机访问 `http://<电脑IP>:9098` 是否被拒；`netsh interface portproxy show v4tov4` |
+| 一直「重连中」 | 9098 端口是否可达；WSL 里的 Server 进程是否在跑 |
+
+### 一定要用 Expo Go 的话
+
+需要做一个 Expo + WebView 的壳工程（`react-native-webview` 加载上面这个 URL），再 `npx expo start` 扫码。本质仍是 WebView 加载 H5，收益有限；如需我可以生成该壳工程。

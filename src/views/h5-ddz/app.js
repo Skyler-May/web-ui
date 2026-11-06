@@ -524,6 +524,26 @@ function sendAction(choice) {
     log("我选择：" + ({ 0: "过", 1: "碰", 2: "杠", 4: "胡" }[choice] || choice));
 }
 
+
+// 把服务端返回的 ws 地址改写成「当前页面所在主机」，方便手机用局域网访问
+function normalizeWs(addr) {
+    if (!addr) return addr;
+    try {
+        const u = new URL(addr);
+        const h = location.hostname;
+        if (!h || h === "localhost" || h === "127.0.0.1") {
+            // 本机调试：服务端可能给 10.0.2.2（模拟器桥接）
+            if (u.hostname === "10.0.2.2") u.hostname = "127.0.0.1";
+            return u.toString();
+        }
+        // 手机/局域网访问：统一指向页面所在机器
+        if (u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "10.0.2.2")
+            u.hostname = h;
+        return u.toString();
+    } catch (e) {
+        return addr;
+    }
+}
 // ---------------- 连接与断线重连 ----------------
 function startTimers() {
     stopTimers();
