@@ -397,11 +397,22 @@ function onMahjong(type, body) {
         case "MsgZhejiangMahjongGameOver":
             over = true;
             myTurn = false;
-            $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner;
-            log("本局结束：赢家座位 " + body.winner + (body.zimo ? "(自摸)" : "(点炮)") +
-                "，番 " + body.fan + "，得分 " + body.score + "，牌型 " + body.desc);
-            showBanner(body.winner === mySeat ? "🎉 你胡了" : "本局结束",
-                "赢家 座位" + body.winner + " · " + (body.zimo ? "自摸" : "点炮") + " · " + body.desc + " · " + body.fan + "番 " + body.score + "分");
+            {
+                const ws = body.winners || [];
+                const multi = ws.length > 1;
+                const title = ws.indexOf(mySeat) >= 0 ? "🎉 你胡了" : "本局结束";
+                let sub;
+                if (multi) {
+                    const parts = ws.map((s, i) => "座位" + s + "(" + (body.winnerDescs[i] || "") + " " + body.winnerFans[i] + "番)");
+                    sub = "一炮多响 · " + parts.join("、") + " · 点炮 座位" + body.fromSeat;
+                    log("一炮多响：" + parts.join("、") + "，点炮座位 " + body.fromSeat);
+                } else {
+                    sub = "赢家 座位" + body.winner + " · " + (body.zimo ? "自摸" : "点炮") + " · " + body.desc + " · " + body.fan + "番 " + body.score + "分";
+                    log("本局结束：赢家座位 " + body.winner + (body.zimo ? "(自摸)" : "(点炮)") + "，番 " + body.fan + "，得分 " + body.score + "，牌型 " + body.desc);
+                }
+                $("stateInfo").textContent = "本局结束，赢家 座位" + body.winner;
+                showBanner(title, sub, 5200);
+            }
             renderHand();
             break;
     }
